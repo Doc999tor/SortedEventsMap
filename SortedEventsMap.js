@@ -1,16 +1,35 @@
 export class SortedEventsMap extends Map {
 	setAndReturnMap (data) {
 		return new this.constructor(
-			(
-				[...this]
-				.concat(
-					Object.entries(this.aggregateEvents(data))
-				)
-			).sort()
+			Object.entries(Object.assign(this._mapToObj(), this._aggregateEvents(data)))
+			.sort()
 		)
 	}
 
-	aggregateEvents (data) {
+	getEventsListWithIntervalsByDate (date) {
+
+		// TODO: add intevals check
+
+		const events = this.get(date);
+		for (var i = events.length - 1; i >= 0; i--) {
+			if (events[i].columnIndex + 1 !== events[i].columns) { continue; }
+			if (i === 0) { break; }
+
+			const startDate = events[i-1].endDate; // start of interval is an end of the previous event
+			const endDate = events[i].startDate;
+			const diffMinutes = (endDate - startDate) * 1000 * 60; // interval duration in minutes
+
+			if (diffMinutes === 0) { continue; } // interval equals to 0, non relevant
+
+			events.splice(i-1, 0, { // mutates the saved array
+				startDate,
+				endDate,
+				off_time: 'interval'
+			})
+		}
+	}
+
+	_aggregateEvents (data) {
 		const aggregatedEventsObj  = data.reduce((agg, a) => {
 			a.startDate = new Date(a.start);
 			a.endDate = new Date(a.end);
@@ -24,12 +43,12 @@ export class SortedEventsMap extends Map {
 		// sort events by start fields
 		for (const key in aggregatedEventsObj) {
 			aggregatedEventsObj[key].sort((a, b) => a.start > b.start ? 1 : -1)
-			this.markOverlappingEvents(aggregatedEventsObj[key]);
+			this._markOverlappingEvents(aggregatedEventsObj[key]);
 		}
 		return aggregatedEventsObj;
 	}
 
-	markOverlappingEvents (events) {
+	_markOverlappingEvents (events) {
 		const intervals = []
 		for (let event_i = 0; event_i < events.length; event_i++) {
 			if (!intervals.length) {
@@ -60,5 +79,13 @@ export class SortedEventsMap extends Map {
 			endDate: event.endDate,
 			apps: [event]
 		}
+	}
+
+	_mapToObj () {
+		const obj = {}
+		for (let [k, v] of this) {
+			obj[k] = v; // pointers to inner arrays persist
+		}
+		return obj;
 	}
 }
